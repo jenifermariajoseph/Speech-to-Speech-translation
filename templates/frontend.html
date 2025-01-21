@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech to Speech Translation</title>
+    <style>
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        /* Container Styling */
+        .container {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: #4A4A4A;
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin: 15px 0 5px;
+            text-align: left;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+
+        input:focus, select:focus {
+            border-color: #6e8efb;
+            outline: none;
+            box-shadow: 0 0 5px rgba(110, 142, 251, 0.5);
+        }
+
+        button {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            border: none;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #a777e3, #6e8efb);
+        }
+
+        #loader {
+            font-size: 1rem;
+            color: #555;
+            margin: 10px 0;
+        }
+
+        #errorMessage {
+            font-size: 0.9rem;
+            color: red;
+            margin: 10px 0;
+        }
+
+        video {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 600px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            input, select, button {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Speech to Speech Translation</h1>
+        <form id="translationForm">
+            <!-- Upload Video -->
+            <label for="videoInput">Choose a video file:</label>
+            <input type="file" id="videoInput" accept="video/*" required>
+
+
+            <!-- Uploaded Video Preview -->
+            <label for="uploadedVideoPreview">Uploaded Video Preview:</label>
+            <video id="uploadedVideoPreview" controls style="display: none;"></video>
+            
+            <!-- Language Selection -->
+            <label for="languageSelect">Select translation language:</label>
+            <select id="languageSelect" required>
+                <option value="" disabled selected>Select language</option>
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="zh">Chinese</option>
+                <option value="de">German</option>
+            </select>
+            
+            <!-- Submit Button -->
+            <button type="submit">Translate Video</button>
+        </form>
+
+        <!-- Loader -->
+        <div id="loader" style="display: none;">
+            <p>⏳ Processing your video. Please wait...</p>
+        </div>
+
+        <!-- Error Display -->
+        <div id="errorMessage" style="display: none;"></div>
+
+        <!-- Video Preview -->
+        <video id="translatedVideo" controls style="display: none;"></video>
+    </div>
+
+    <script>
+        document.getElementById("translationForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            
+            const videoInput = document.getElementById("videoInput");
+            const languageSelect = document.getElementById("languageSelect");
+            const translatedVideo = document.getElementById("translatedVideo");
+            const loader = document.getElementById("loader");
+            const errorMessage = document.getElementById("errorMessage");
+    
+            // Hide previous error and video
+            errorMessage.style.display = "none";
+            translatedVideo.style.display = "none";
+    
+            if (!videoInput.files.length) {
+                errorMessage.textContent = "Please choose a video file.";
+                errorMessage.style.display = "block";
+                return;
+            }
+            
+            const file = videoInput.files[0];
+            const language = languageSelect.value;
+    
+            // Show loader
+            loader.style.display = "block";
+    
+            // Prepare the form data
+            const formData = new FormData();
+            formData.append("video", file);
+            formData.append("language", language);
+    
+            try {
+                // Send the video and language to the backend for processing
+                const response = await fetch("/upload", { // Backend endpoint
+                    method: "POST",
+                    body: formData,
+                });
+    
+                if (!response.ok) {
+                    throw new Error("Error processing video.");
+                }
+    
+                // Get the video file as a Blob
+                const blob = await response.blob();
+    
+                // Create a Blob URL and set it as the video source
+                const videoUrl = URL.createObjectURL(blob);
+                loader.style.display = "none"; // Hide loader
+                translatedVideo.src = videoUrl;
+                translatedVideo.style.display = "block";
+            } catch (error) {
+                // Hide loader and display error
+                loader.style.display = "none";
+                errorMessage.textContent = "An error occurred: " + error.message;
+                errorMessage.style.display = "block";
+            }
+        });
+        document.getElementById("videoInput").addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        const videoPreview = document.getElementById("uploadedVideoPreview");
+
+        if (file) {
+            const fileUrl = URL.createObjectURL(file);
+            videoPreview.src = fileUrl;
+            videoPreview.style.display = "block"; // Show the video preview
+        } else {
+            videoPreview.style.display = "none"; // Hide the preview if no file is selected
+        }
+    });
+    </script>
+    
+</body>
+</html>
