@@ -94,6 +94,31 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
+        /* Summary Container */
+        .summary-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            display: none;
+        }
+
+        .summary-container h2 {
+            color: #4A4A4A;
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        .summary-content {
+            text-align: left;
+            line-height: 1.6;
+            color: #666;
+            font-size: 1rem;
+            white-space: pre-wrap;
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .container {
@@ -117,7 +142,6 @@
             <!-- Upload Video -->
             <label for="videoInput">Choose a video file:</label>
             <input type="file" id="videoInput" accept="video/*" required>
-
 
             <!-- Uploaded Video Preview -->
             <label for="uploadedVideoPreview">Uploaded Video Preview:</label>
@@ -147,11 +171,33 @@
         <!-- Error Display -->
         <div id="errorMessage" style="display: none;"></div>
 
-        <!-- Video Preview -->
+        <!-- Translated Video Preview -->
         <video id="translatedVideo" controls style="display: none;"></video>
+
+        <!-- Summary Section -->
+        <div class="summary-container" id="summaryContainer">
+            <h2>Summary</h2>
+            <p class="summary-content" id="summaryContent"></p>
+        </div>
     </div>
 
     <script>
+        document.getElementById("videoInput").addEventListener("change", function(event) {
+            const videoInput = event.target;
+            const uploadedVideoPreview = document.getElementById("uploadedVideoPreview");
+            
+            if (videoInput.files.length > 0) {
+                const file = videoInput.files[0];
+                const objectURL = URL.createObjectURL(file);
+                
+                // Set the video source to the object URL
+                uploadedVideoPreview.src = objectURL;
+                
+                // Display the video preview
+                uploadedVideoPreview.style.display = "block";
+            }
+        });
+    
         document.getElementById("translationForm").addEventListener("submit", async (event) => {
             event.preventDefault();
             
@@ -160,10 +206,13 @@
             const translatedVideo = document.getElementById("translatedVideo");
             const loader = document.getElementById("loader");
             const errorMessage = document.getElementById("errorMessage");
+            const summaryContainer = document.getElementById("summaryContainer");
+            const summaryContent = document.getElementById("summaryContent");
     
             // Hide previous error and video
             errorMessage.style.display = "none";
             translatedVideo.style.display = "none";
+            summaryContainer.style.display = "none";
     
             if (!videoInput.files.length) {
                 errorMessage.textContent = "Please choose a video file.";
@@ -184,7 +233,7 @@
     
             try {
                 // Send the video and language to the backend for processing
-                const response = await fetch("/upload", { // Backend endpoint
+                const response = await fetch("/upload", {
                     method: "POST",
                     body: formData,
                 });
@@ -193,34 +242,25 @@
                     throw new Error("Error processing video.");
                 }
     
-                // Get the video file as a Blob
-                const blob = await response.blob();
-    
-                // Create a Blob URL and set it as the video source
-                const videoUrl = URL.createObjectURL(blob);
-                loader.style.display = "none"; // Hide loader
-                translatedVideo.src = videoUrl;
-                translatedVideo.style.display = "block";
+                const data = await response.json(); // Expect JSON with video URL & summary
+                if (data.videoUrl) {
+                 translatedVideo.src = data.videoUrl;
+                 translatedVideo.style.display = "block";
+    }
+
+            if (data.summary) {
+                summaryContent.textContent = data.summary;
+                summaryContainer.style.display = "block"; // Show summary
+    }
+       
             } catch (error) {
-                // Hide loader and display error
                 loader.style.display = "none";
                 errorMessage.textContent = "An error occurred: " + error.message;
                 errorMessage.style.display = "block";
             }
         });
-        document.getElementById("videoInput").addEventListener("change", (event) => {
-        const file = event.target.files[0];
-        const videoPreview = document.getElementById("uploadedVideoPreview");
-
-        if (file) {
-            const fileUrl = URL.createObjectURL(file);
-            videoPreview.src = fileUrl;
-            videoPreview.style.display = "block"; // Show the video preview
-        } else {
-            videoPreview.style.display = "none"; // Hide the preview if no file is selected
-        }
-    });
     </script>
     
 </body>
 </html>
+
