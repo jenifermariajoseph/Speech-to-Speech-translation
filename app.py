@@ -7,6 +7,8 @@ import whisper
 from gtts import gTTS
 from dotenv import load_dotenv
 import logging
+from flask import jsonify
+from flask import send_from_directory
 
 # Load environment variables from .env file
 load_dotenv()
@@ -35,19 +37,24 @@ def allowed_file(filename):
 def index():
     return render_template("frontend.html")
 
+@app.route('/processed/<filename>')
+def send_processed_file(filename):
+    return send_from_directory(PROCESSED_FOLDER, filename)
+
 @app.route("/upload", methods=["POST"])
 def upload():
     try:
         if "video" not in request.files:
             flash("No file part in the request.")
-            return redirect(request.url)
+            return jsonify({"error": "No file uploaded"}), 400
+
         
         video_file = request.files["video"]
         language = request.form.get("language")
 
         if video_file.filename == "":
             flash("No file selected.")
-            return redirect(request.url)
+            return jsonify({"error": "No file selected"}), 400
 
         if video_file and allowed_file(video_file.filename):
             # Secure the uploaded file name
@@ -67,6 +74,12 @@ def upload():
                 transcribed_text_path = os.path.join(PROCESSED_FOLDER, "transcribed_text.txt")
                 transcribe_audio(audio_path, transcribed_text_path)
                 logging.info("Audio transcription complete.")
+
+                # Step 2.5: Generate Summary
+                summary_text_path = os.path.join(PROCESSED_FOLDER, "summary_text.txt")
+                summarize_text(transcribed_text_path, summary_text_path)
+                logging.info("Summary generation complete.")
+
 
                 # Step 3: Translate the transcribed text
                 translated_text_path = os.path.join(PROCESSED_FOLDER, "translated_text.txt")
@@ -88,18 +101,22 @@ def upload():
                 replace_audio_in_video(video_path, mixed_audio_path, output_video_path)
                 logging.info(f"Video processing complete. Final video saved at {output_video_path}.")
 
-                return send_file(output_video_path, as_attachment=True)
+                with open(summary_text_path, "r") as file:
+                   summary_text = file.read()
+
+                return jsonify({
+                "videoUrl": url_for('send_processed_file', filename=f'translated_video_{language}.mp4'),
+                "summary": summary_text
+            })
             except Exception as e:
-                logging.error(f"Error during video processing: {e}")
-                flash(f"An error occurred during processing: {e}")
-                return redirect(request.url)
+                return jsonify({"error": str(e)}), 500  
         else:
-            flash("Invalid file type.")
-            return redirect(request.url)
+            return jsonify({"error": "Invalid file type"}), 400
+
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        flash(f"An unexpected error occurred: {e}")
-        return redirect(request.url)
+       return jsonify({"error": str(e)}), 500
+
+
 
 # Helper Functions
 def extract_audio(video_path, output_audio_path):
@@ -138,6 +155,30 @@ def translate_text(input_file, output_file, language):
     with open(output_file, "w") as file:
         file.write(res)
 
+def summarize_text(input_file, output_file):
+    logging.info(f"Generating summary for {input_file}.")
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain.prompts.prompt import PromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
+
+    prompt_template = PromptTemplate(
+        input_variables=["text"],
+        template="Summarize the following text:\n\n{text}"
+    )
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",
+        api_key=os.getenv("GOOGLE_API_KEY")
+    )
+    chain = prompt_template | llm | StrOutputParser()
+
+    with open(input_file, "r") as file:
+        text_to_summarize = file.read()
+    summary = chain.invoke({"text": text_to_summarize})
+
+    with open(output_file, "w") as file:
+        file.write(summary)
+
+
 def generate_audio(input_file, output_file, language):
     logging.info(f"Generating audio in {language} from text file {input_file}.")
     with open(input_file, "r") as file:
@@ -174,6 +215,10 @@ def replace_audio_in_video(video_path, new_audio_path, output_video_path):
         "-shortest", output_video_path
     ]
     subprocess.run(command, check=True)
+
+@app.route("/download/<filename>")
+def download_video(filename):
+    return send_file(os.path.join(PROCESSED_FOLDER, filename))
 
 if __name__ == "__main__":
     app.run(debug=True)
